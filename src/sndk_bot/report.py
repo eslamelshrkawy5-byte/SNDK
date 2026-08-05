@@ -22,7 +22,13 @@ def format_report(
     data_basis: str | None = None,
 ) -> str:
     local = now.astimezone(ZoneInfo("Asia/Riyadh"))
-    label = "MANDATORY REPORT" if mandatory_slot else "CONFIRMED STATE CHANGE"
+    label = (
+        "ON-DEMAND ANALYSIS"
+        if mandatory_slot == "manual"
+        else "MANDATORY REPORT"
+        if mandatory_slot
+        else "CONFIRMED STATE CHANGE"
+    )
     action = {
         Signal.SNXX: "Bullish SNDK setup → consider SNXX only after your own checks",
         Signal.SNDQ: "Bearish SNDK setup → consider SNDQ only after your own checks",
