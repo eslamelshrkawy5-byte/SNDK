@@ -126,7 +126,16 @@ def run(config: Config, now: datetime | None = None, force_report: bool = False)
         send = slot is not None or change_alert
         if send:
             telegram.send(
-                format_report(decision, news, state, now, slot, data_basis),
+                format_report(
+                    decision,
+                    news,
+                    state,
+                    now,
+                    slot,
+                    data_basis,
+                    config.enter_threshold,
+                    config.persistence_runs,
+                ),
                 decision.signal.value,
             )
             mandatory_sent = slot is not None

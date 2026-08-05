@@ -22,25 +22,41 @@ def _arabic_signal(signal: Signal) -> str:
     return labels[signal]
 
 
-def _direction_summary(decision: SignalDecision) -> tuple[str, str]:
-    if decision.score > 0:
-        direction = "🟢 صاعد"
-    elif decision.score < 0:
-        direction = "🔴 هابط"
+def _direction_summary(
+    decision: SignalDecision,
+    state: BotState,
+    enter_threshold: float,
+    confirmation_required: int,
+) -> tuple[str, str, str]:
+    if decision.score >= enter_threshold:
+        direction = "🟢 صاعد قوي"
+    elif decision.score >= 1.5:
+        direction = "🟡 ميل صاعد غير مؤكد"
+    elif decision.score <= -enter_threshold:
+        direction = "🔴 هابط قوي"
+    elif decision.score <= -1.5:
+        direction = "🟠 ميل هابط غير مؤكد"
     else:
         direction = "⚪ محايد"
 
     if decision.signal == Signal.SNXX:
-        confirmation = "✅ صعود مؤكد — إشارة SNXX نشطة"
+        confirmation = f"✅ {confirmation_required}/{confirmation_required} — صعود مؤكد"
+        decision_now = "🟢 دخول/استمرار SNXX"
     elif decision.signal == Signal.SNDQ:
-        confirmation = "✅ هبوط مؤكد — إشارة SNDQ نشطة"
+        confirmation = f"✅ {confirmation_required}/{confirmation_required} — هبوط مؤكد"
+        decision_now = "🔴 دخول/استمرار SNDQ"
     elif decision.raw_signal == Signal.SNXX:
-        confirmation = "⏳ صعود قوي قيد التأكيد — انتظر قبل الدخول"
+        count = min(state.candidate_count, confirmation_required)
+        confirmation = f"⏳ {count}/{confirmation_required} — صعود قيد التأكيد"
+        decision_now = "⛔ لا تدخل الآن؛ انتظر اكتمال تأكيد الصعود"
     elif decision.raw_signal == Signal.SNDQ:
-        confirmation = "⏳ هبوط قوي قيد التأكيد — انتظر قبل الدخول"
+        count = min(state.candidate_count, confirmation_required)
+        confirmation = f"⏳ {count}/{confirmation_required} — هبوط قيد التأكيد"
+        decision_now = "⛔ لا تدخل الآن؛ انتظر اكتمال تأكيد الهبوط"
     else:
-        confirmation = "❌ غير مؤكد للدخول — الإشارة الحالية WAIT"
-    return direction, confirmation
+        confirmation = f"❌ 0/{confirmation_required} — لا توجد إشارة دخول"
+        decision_now = "⛔ لا تدخل SNXX أو SNDQ الآن"
+    return direction, confirmation, decision_now
 
 
 def _arabic_reason(text: str) -> str:
@@ -84,6 +100,8 @@ def format_report(
     now: datetime,
     mandatory_slot: str | None = None,
     data_basis: str | None = None,
+    enter_threshold: float = 3.5,
+    confirmation_required: int = 2,
 ) -> str:
     local = now.astimezone(ZoneInfo("Asia/Riyadh"))
     label = (
@@ -107,13 +125,18 @@ def format_report(
         headlines = "• لم يتم الحصول على أخبار حديثة؛ خُفّضت درجة الثقة"
     position_labels = {"SNXX": "داخل SNXX", "SNDQ": "داخل SNDQ", None: "لم تؤكد دخولًا"}
     position = position_labels.get(state.confirmed_position, "لم تؤكد دخولًا")
-    direction, confirmation = _direction_summary(decision)
+    direction, confirmation, decision_now = _direction_summary(
+        decision, state, enter_threshold, confirmation_required
+    )
     basis = data_basis or "بيانات 15 دقيقة حديثة مع الأخبار الحالية"
     return (
         f"📊 SNDK | {label}\n"
         f"الرياض: {local:%Y-%m-%d %H:%M}\n"
         f"الاتجاه الفني الحالي: {direction} | الدرجة: {decision.score:+.2f}\n"
         f"تأكيد الدخول: {confirmation}\n"
+        f"القرار الآن: {decision_now}\n"
+        f"قاعدة الدخول: +{enter_threshold:.1f} لـSNXX أو "
+        f"−{enter_threshold:.1f} لـSNDQ في {confirmation_required} تحليلين متتاليين\n"
         f"الإشارة المعتمدة: {_arabic_signal(decision.signal)}\n"
         f"التوصية: {action}\n"
         f"حالة مركزك: {position}\n"

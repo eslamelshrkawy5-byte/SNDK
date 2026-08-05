@@ -22,23 +22,35 @@ def decision(signal: Signal, raw_signal: Signal, score: float) -> SignalDecision
     )
 
 
-def test_wait_report_still_shows_current_bullish_direction():
+def test_neutral_report_for_weak_score_is_explicit():
+    report = format_report(
+        decision(Signal.WAIT, Signal.WAIT, 0.09), NewsBundle(), BotState(), NOW, "manual"
+    )
+
+    assert "الاتجاه الفني الحالي: ⚪ محايد" in report
+    assert "تأكيد الدخول: ❌ 0/2 — لا توجد إشارة دخول" in report
+    assert "القرار الآن: ⛔ لا تدخل SNXX أو SNDQ الآن" in report
+    assert "قاعدة الدخول: +3.5 لـSNXX أو −3.5 لـSNDQ في 2 تحليلين متتاليين" in report
+
+
+def test_moderate_bullish_score_is_only_unconfirmed_lean():
     report = format_report(
         decision(Signal.WAIT, Signal.WAIT, 2.1), NewsBundle(), BotState(), NOW, "manual"
     )
 
-    assert "الاتجاه الفني الحالي: 🟢 صاعد" in report
-    assert "تأكيد الدخول: ❌ غير مؤكد للدخول" in report
-    assert "الإشارة المعتمدة: انتظار" in report
+    assert "الاتجاه الفني الحالي: 🟡 ميل صاعد غير مؤكد" in report
+    assert "تأكيد الدخول: ❌ 0/2" in report
 
 
-def test_pending_bearish_confirmation_is_explicit():
+def test_pending_bearish_confirmation_shows_progress():
+    state = BotState(candidate_signal="SNDQ", candidate_count=1)
     report = format_report(
-        decision(Signal.WAIT, Signal.SNDQ, -4.2), NewsBundle(), BotState(), NOW, "manual"
+        decision(Signal.WAIT, Signal.SNDQ, -4.2), NewsBundle(), state, NOW, "manual"
     )
 
-    assert "الاتجاه الفني الحالي: 🔴 هابط" in report
-    assert "تأكيد الدخول: ⏳ هبوط قوي قيد التأكيد" in report
+    assert "الاتجاه الفني الحالي: 🔴 هابط قوي" in report
+    assert "تأكيد الدخول: ⏳ 1/2 — هبوط قيد التأكيد" in report
+    assert "القرار الآن: ⛔ لا تدخل الآن؛ انتظر اكتمال تأكيد الهبوط" in report
 
 
 def test_confirmed_bullish_signal_is_explicit():
@@ -46,5 +58,6 @@ def test_confirmed_bullish_signal_is_explicit():
         decision(Signal.SNXX, Signal.SNXX, 4.5), NewsBundle(), BotState(), NOW, "manual"
     )
 
-    assert "الاتجاه الفني الحالي: 🟢 صاعد" in report
-    assert "تأكيد الدخول: ✅ صعود مؤكد — إشارة SNXX نشطة" in report
+    assert "الاتجاه الفني الحالي: 🟢 صاعد قوي" in report
+    assert "تأكيد الدخول: ✅ 2/2 — صعود مؤكد" in report
+    assert "القرار الآن: 🟢 دخول/استمرار SNXX" in report
