@@ -41,20 +41,40 @@ def _direction_summary(
 
     if decision.signal == Signal.SNXX:
         confirmation = f"✅ {confirmation_required}/{confirmation_required} — صعود مؤكد"
-        decision_now = "🟢 دخول/استمرار SNXX"
     elif decision.signal == Signal.SNDQ:
         confirmation = f"✅ {confirmation_required}/{confirmation_required} — هبوط مؤكد"
-        decision_now = "🔴 دخول/استمرار SNDQ"
     elif decision.raw_signal == Signal.SNXX:
         count = min(state.candidate_count, confirmation_required)
         confirmation = f"⏳ {count}/{confirmation_required} — صعود قيد التأكيد"
-        decision_now = "⛔ لا تدخل الآن؛ انتظر اكتمال تأكيد الصعود"
     elif decision.raw_signal == Signal.SNDQ:
         count = min(state.candidate_count, confirmation_required)
         confirmation = f"⏳ {count}/{confirmation_required} — هبوط قيد التأكيد"
-        decision_now = "⛔ لا تدخل الآن؛ انتظر اكتمال تأكيد الهبوط"
     else:
         confirmation = f"❌ 0/{confirmation_required} — لا توجد إشارة دخول"
+
+    if state.confirmed_position == "SNXX":
+        if decision.signal == Signal.SNXX:
+            decision_now = "🟢 استمر في SNXX"
+        elif decision.signal == Signal.SNDQ:
+            decision_now = "🔴 اخرج من SNXX؛ الانعكاس إلى SNDQ مؤكد"
+        else:
+            decision_now = "🟠 اخرج من SNXX الآن؛ شرط الخروج/WAIT مؤكد"
+    elif state.confirmed_position == "SNDQ":
+        if decision.signal == Signal.SNDQ:
+            decision_now = "🔴 استمر في SNDQ"
+        elif decision.signal == Signal.SNXX:
+            decision_now = "🟢 اخرج من SNDQ؛ الانعكاس إلى SNXX مؤكد"
+        else:
+            decision_now = "🟠 اخرج من SNDQ الآن؛ شرط الخروج/WAIT مؤكد"
+    elif decision.signal == Signal.SNXX:
+        decision_now = "🟢 ادخل SNXX"
+    elif decision.signal == Signal.SNDQ:
+        decision_now = "🔴 ادخل SNDQ"
+    elif decision.raw_signal == Signal.SNXX:
+        decision_now = "⛔ لا تدخل الآن؛ انتظر اكتمال تأكيد الصعود"
+    elif decision.raw_signal == Signal.SNDQ:
+        decision_now = "⛔ لا تدخل الآن؛ انتظر اكتمال تأكيد الهبوط"
+    else:
         decision_now = "⛔ لا تدخل SNXX أو SNDQ الآن"
     return direction, confirmation, decision_now
 

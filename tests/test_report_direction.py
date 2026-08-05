@@ -60,4 +60,14 @@ def test_confirmed_bullish_signal_is_explicit():
 
     assert "الاتجاه الفني الحالي: 🟢 صاعد قوي" in report
     assert "تأكيد الدخول: ✅ 2/2 — صعود مؤكد" in report
-    assert "القرار الآن: 🟢 دخول/استمرار SNXX" in report
+    assert "القرار الآن: 🟢 ادخل SNXX" in report
+
+
+def test_wait_signal_tells_confirmed_snxx_position_to_exit():
+    state = BotState(confirmed_position="SNXX")
+    report = format_report(
+        decision(Signal.WAIT, Signal.WAIT, 0.09), NewsBundle(), state, NOW, "manual"
+    )
+
+    assert "القرار الآن: 🟠 اخرج من SNXX الآن؛ شرط الخروج/WAIT مؤكد" in report
+    assert "حالة مركزك: داخل SNXX" in report
