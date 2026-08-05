@@ -15,7 +15,8 @@ function requestedAnalysis(text) {
 }
 
 async function telegram(env, method, payload) {
-  const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${method}`, {
+  const token = String(env.TELEGRAM_BOT_TOKEN || "").trim();
+  const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload),
@@ -31,13 +32,14 @@ async function telegram(env, method, payload) {
 }
 
 async function dispatch(env, mode, position) {
+  const token = String(env.GITHUB_DISPATCH_TOKEN || "").trim();
   const inputs = { mode };
   if (position) inputs.position = position;
   const response = await fetch(GITHUB_DISPATCH_URL, {
     method: "POST",
     headers: {
       accept: "application/vnd.github+json",
-      authorization: `Bearer ${env.GITHUB_DISPATCH_TOKEN}`,
+      authorization: `Bearer ${token}`,
       "x-github-api-version": "2022-11-28",
       "content-type": "application/json",
       "user-agent": "sndk-telegram-webhook",
@@ -49,8 +51,12 @@ async function dispatch(env, mode, position) {
   }
 }
 
+function configuredChatId(env) {
+  return String(env.TELEGRAM_CHAT_ID || "").trim();
+}
+
 function acceptedChat(chatId, env) {
-  return String(chatId || "") === String(env.TELEGRAM_CHAT_ID);
+  return String(chatId || "") === configuredChatId(env);
 }
 
 function callbackPosition(data) {
@@ -66,7 +72,9 @@ export default {
     if (request.method !== "POST") {
       return new Response("Not found", { status: 404 });
     }
-    if (request.headers.get("X-Telegram-Bot-Api-Secret-Token") !== env.TELEGRAM_WEBHOOK_SECRET) {
+    const telegramSecret = request.headers.get("X-Telegram-Bot-Api-Secret-Token") || "";
+    const configuredSecret = String(env.TELEGRAM_WEBHOOK_SECRET || "").trim();
+    if (!configuredSecret || telegramSecret !== configuredSecret) {
       return new Response("Unauthorized", { status: 401 });
     }
 
@@ -82,14 +90,14 @@ export default {
       if (requestedAnalysis(message.text)) {
         try {
           await telegram(env, "sendMessage", {
-            chat_id: env.TELEGRAM_CHAT_ID,
+            chat_id: configuredChatId(env),
             text: "⏳ جارٍ إعداد تحليل SNDK الآن. ستصلك النتيجة العربية بالأزرار خلال وقت قصير.",
           });
           await dispatch(env, "force-report");
         } catch (error) {
           console.error("analysis dispatch failed", error);
           await telegram(env, "sendMessage", {
-            chat_id: env.TELEGRAM_CHAT_ID,
+            chat_id: configuredChatId(env),
             text: "⚠️ تعذّر تشغيل التحليل الفوري الآن. أعد المحاولة بعد دقائق، والتقارير المجدولة مستمرة.",
           });
         }
@@ -106,8 +114,12 @@ export default {
           callback_query_id: callback.id,
           text: "تم حفظ المركز وإعادة التحليل الآن",
         });
+      } catch (error) {
+        console.error("callback acknowledgement failed", error);
+      }
+      try {
         await telegram(env, "sendMessage", {
-          chat_id: env.TELEGRAM_CHAT_ID,
+          chat_id: configuredChatId(env),
           text:
             position === "EXIT"
               ? "⬜ تم تسجيل أنك خارج المركز. جارٍ إعادة تحليل SNDK."
@@ -116,10 +128,9 @@ export default {
         await dispatch(env, "position-update", position);
       } catch (error) {
         console.error("position dispatch failed", error);
-        await telegram(env, "answerCallbackQuery", {
-          callback_query_id: callback.id,
-          text: "تعذّر الحفظ الآن؛ أعد الضغط بعد لحظات",
-          show_alert: true,
+        await telegram(env, "sendMessage", {
+          chat_id: configuredChatId(env),
+          text: "⚠️ تعذّر حفظ حالة المركز الآن. أعد الضغط بعد لحظات.",
         });
       }
     }

@@ -41,6 +41,18 @@ def _arabic_reason(text: str) -> str:
         return "نبرة الأخبار الحديثة محايدة أو محدودة التأثير"
     if text.startswith("Candidate "):
         return "الإشارة ما زالت تحت التأكيد ولم تكتمل شروطها"
+    if text.startswith(("QQQ: ", "SMH: ")):
+        ticker, detail = text.split(": ", 1)
+        return f"{ticker}: {_arabic_reason(detail)}"
+    if text.startswith("Finviz technical signal: "):
+        signal = text.removeprefix("Finviz technical signal: ")
+        translated = {
+            "top gainer": "ضمن الأعلى صعودًا",
+            "new high": "قمة سعرية جديدة",
+            "top loser": "ضمن الأعلى هبوطًا",
+            "new low": "قاع سعري جديد",
+        }.get(signal, "إشارة فنية إضافية")
+        return f"Finviz: {translated}"
     return replacements.get(text, text)
 
 
