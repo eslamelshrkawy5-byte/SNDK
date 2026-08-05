@@ -22,6 +22,27 @@ def _arabic_signal(signal: Signal) -> str:
     return labels[signal]
 
 
+def _direction_summary(decision: SignalDecision) -> tuple[str, str]:
+    if decision.score > 0:
+        direction = "🟢 صاعد"
+    elif decision.score < 0:
+        direction = "🔴 هابط"
+    else:
+        direction = "⚪ محايد"
+
+    if decision.signal == Signal.SNXX:
+        confirmation = "✅ صعود مؤكد — إشارة SNXX نشطة"
+    elif decision.signal == Signal.SNDQ:
+        confirmation = "✅ هبوط مؤكد — إشارة SNDQ نشطة"
+    elif decision.raw_signal == Signal.SNXX:
+        confirmation = "⏳ صعود قوي قيد التأكيد — انتظر قبل الدخول"
+    elif decision.raw_signal == Signal.SNDQ:
+        confirmation = "⏳ هبوط قوي قيد التأكيد — انتظر قبل الدخول"
+    else:
+        confirmation = "❌ غير مؤكد للدخول — الإشارة الحالية WAIT"
+    return direction, confirmation
+
+
 def _arabic_reason(text: str) -> str:
     replacements = {
         "EMA9 is above EMA21": "المتوسط EMA9 أعلى من EMA21",
@@ -86,11 +107,14 @@ def format_report(
         headlines = "• لم يتم الحصول على أخبار حديثة؛ خُفّضت درجة الثقة"
     position_labels = {"SNXX": "داخل SNXX", "SNDQ": "داخل SNDQ", None: "لم تؤكد دخولًا"}
     position = position_labels.get(state.confirmed_position, "لم تؤكد دخولًا")
+    direction, confirmation = _direction_summary(decision)
     basis = data_basis or "بيانات 15 دقيقة حديثة مع الأخبار الحالية"
     return (
         f"📊 SNDK | {label}\n"
         f"الرياض: {local:%Y-%m-%d %H:%M}\n"
-        f"الإشارة: {_arabic_signal(decision.signal)} | الدرجة: {decision.score:+.2f}\n"
+        f"الاتجاه الفني الحالي: {direction} | الدرجة: {decision.score:+.2f}\n"
+        f"تأكيد الدخول: {confirmation}\n"
+        f"الإشارة المعتمدة: {_arabic_signal(decision.signal)}\n"
         f"التوصية: {action}\n"
         f"حالة مركزك: {position}\n"
         f"أساس التحليل: {basis}\n\n"
