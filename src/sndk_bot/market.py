@@ -100,6 +100,27 @@ def fetch_market_bundle(
     return result
 
 
+def completed_intraday_bundle(
+    bundle: dict[str, MarketSeries], now: datetime, interval_minutes: int = 15
+) -> dict[str, MarketSeries]:
+    """Remove the currently forming intraday bar to avoid acting on incomplete data."""
+    cutoff = now.astimezone(UTC) - timedelta(minutes=interval_minutes)
+    prepared: dict[str, MarketSeries] = {}
+    missing: list[str] = []
+    for ticker, series in bundle.items():
+        frame = series.frame.loc[series.frame.index <= cutoff].copy()
+        if len(frame) < 30:
+            missing.append(f"{ticker} ({len(frame)} completed bars)")
+            continue
+        timestamp = frame.index[-1].to_pydatetime()
+        prepared[ticker] = MarketSeries(ticker, frame, series.source, timestamp)
+    if "SNDK" not in prepared or len(prepared) < 2:
+        raise MarketDataError(
+            "Insufficient completed 15-minute bars; refusing to signal: " + ", ".join(missing)
+        )
+    return prepared
+
+
 def assert_fresh(bundle: dict[str, MarketSeries], now: datetime, stale_minutes: int) -> None:
     limit = timedelta(minutes=stale_minutes)
     stale = [

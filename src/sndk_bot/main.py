@@ -11,6 +11,7 @@ from .config import Config, ConfigurationError
 from .market import (
     MarketDataError,
     assert_fresh,
+    completed_intraday_bundle,
     completed_session_bundle,
     fetch_market_bundle,
 )
@@ -104,12 +105,13 @@ def run(config: Config, now: datetime | None = None, force_report: bool = False)
         if slot == "1030":
             bundle, completed_close = completed_session_bundle(bundle, now, config.market_calendar)
             data_basis = (
-                "Latest completed US session through "
-                f"{completed_close.isoformat()} plus news fetched now"
+                "آخر جلسة أمريكية مكتملة حتى "
+                f"{completed_close.isoformat()} مع الأخبار المجلوبة الآن"
             )
         else:
+            bundle = completed_intraday_bundle(bundle, now)
             assert_fresh(bundle, now, config.stale_minutes)
-            data_basis = "Strictly fresh 15-minute intraday bars plus news fetched now"
+            data_basis = "آخر شموع 15 دقيقة المكتملة مع الأخبار المجلوبة الآن"
         news = fetch_news(config.request_timeout, now)
         decision = decide(
             bundle,
@@ -119,6 +121,10 @@ def run(config: Config, now: datetime | None = None, force_report: bool = False)
             config.persistence_runs,
             config.enter_threshold,
             config.exit_threshold,
+            config.strong_enter_threshold,
+            config.min_sndk_votes,
+            config.min_volume_ratio,
+            config.exit_persistence_runs,
         )
         change_alert = alerts_were_enabled and _should_alert(
             state.confirmed_position, old_signal, decision.signal, decision.confirmed
@@ -135,6 +141,11 @@ def run(config: Config, now: datetime | None = None, force_report: bool = False)
                     data_basis,
                     config.enter_threshold,
                     config.persistence_runs,
+                    config.strong_enter_threshold,
+                    config.min_sndk_votes,
+                    config.min_volume_ratio,
+                    config.exit_threshold,
+                    config.exit_persistence_runs,
                 ),
                 decision.signal.value,
             )

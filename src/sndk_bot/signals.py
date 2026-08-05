@@ -72,6 +72,116 @@ def _ticker_score(features: dict[str, float], weight: float) -> tuple[float, lis
     return score, reasons
 
 
+def _direction_votes(features: dict[str, float]) -> tuple[int, int]:
+    bullish = sum(
+        (
+            features["ema_spread"] > 0.10,
+            features["macd_hist"] > 0,
+            features["momentum"] > 0.20,
+            52 <= features["rsi"] <= 72,
+        )
+    )
+    bearish = sum(
+        (
+            features["ema_spread"] < -0.10,
+            features["macd_hist"] < 0,
+            features["momentum"] < -0.20,
+            28 <= features["rsi"] <= 48,
+        )
+    )
+    return bullish, bearish
+
+
+def _recent_high_impact_event(news: NewsBundle, now: datetime) -> str | None:
+    keywords = {
+        "earnings",
+        "guidance",
+        "fomc",
+        "federal reserve",
+        "cpi",
+        "inflation report",
+        "jobs report",
+        "nonfarm payroll",
+        "sec investigation",
+        "bankruptcy",
+        "share offering",
+        "acquisition",
+        "merger",
+    }
+    for item in news.items:
+        if item.published is None:
+            continue
+        age_seconds = (now - item.published).total_seconds()
+        if 0 <= age_seconds <= 6 * 3600:
+            title = item.title.lower()
+            if any(keyword in title for keyword in keywords):
+                return item.title[:110]
+    return None
+
+
+def _balanced_entry_signal(
+    bundle: dict[str, MarketSeries],
+    news: NewsBundle,
+    now: datetime,
+    score: float,
+    enter_threshold: float,
+    strong_enter_threshold: float,
+    min_sndk_votes: int,
+    min_volume_ratio: float,
+) -> tuple[Signal, list[str], list[str]]:
+    if score >= enter_threshold:
+        target = Signal.SNXX
+        direction = 1
+    elif score <= -enter_threshold:
+        target = Signal.SNDQ
+        direction = -1
+    else:
+        return Signal.WAIT, [], []
+
+    high_impact_event = _recent_high_impact_event(news, now)
+    if high_impact_event:
+        return Signal.WAIT, [], [f"Entry blocked by high-impact event: {high_impact_event}"]
+
+    sndk = _features(bundle["SNDK"])
+    bullish_votes, bearish_votes = _direction_votes(sndk)
+    directional_votes = bullish_votes if direction > 0 else bearish_votes
+    sndk_component, _ = _ticker_score(sndk, 1.0)
+    context_components = {
+        ticker: _ticker_score(_features(bundle[ticker]), 1.0)[0]
+        for ticker in ("QQQ", "SMH")
+        if ticker in bundle
+    }
+    market_support = any(component * direction > 0 for component in context_components.values())
+    volume_ok = sndk["volume_ratio"] >= min_volume_ratio
+
+    regular_entry = directional_votes >= min_sndk_votes and market_support and volume_ok
+    strong_entry = (
+        abs(score) >= strong_enter_threshold
+        and sndk_component * direction > 0
+        and context_components.get("SMH", 0.0) * direction > 0
+        and volume_ok
+    )
+    if regular_entry or strong_entry:
+        mode = "strong" if strong_entry and not regular_entry else "balanced"
+        return (
+            target,
+            [
+                f"{mode.title()} entry gate passed: SNDK {directional_votes}/4; "
+                f"volume {sndk['volume_ratio']:.2f}x"
+            ],
+            [],
+        )
+
+    missing: list[str] = []
+    if directional_votes < min_sndk_votes and not strong_entry:
+        missing.append(f"SNDK direction votes {directional_votes}/4")
+    if not market_support and not strong_entry:
+        missing.append("QQQ/SMH market support")
+    if not volume_ok:
+        missing.append(f"SNDK volume {sndk['volume_ratio']:.2f}x")
+    return Signal.WAIT, [], ["Entry blocked: " + "; ".join(missing)]
+
+
 def _news_score(news: NewsBundle, now: datetime) -> tuple[float, list[str]]:
     recent = []
     for item in news.items:
@@ -124,12 +234,20 @@ def apply_hysteresis(
     persistence_runs: int,
     enter_threshold: float,
     exit_threshold: float,
+    entry_signal: Signal | None = None,
+    exit_persistence_runs: int | None = None,
 ) -> tuple[Signal, bool]:
     active = Signal(state.active_signal)
-    if score >= enter_threshold:
-        target = Signal.SNXX
-    elif score <= -enter_threshold:
-        target = Signal.SNDQ
+    if entry_signal is None:
+        entry_signal = (
+            Signal.SNXX
+            if score >= enter_threshold
+            else Signal.SNDQ
+            if score <= -enter_threshold
+            else Signal.WAIT
+        )
+    if entry_signal != Signal.WAIT:
+        target = entry_signal
     elif active == Signal.SNXX and score >= exit_threshold:
         target = Signal.SNXX
     elif active == Signal.SNDQ and score <= -exit_threshold:
@@ -146,7 +264,12 @@ def apply_hysteresis(
     else:
         state.candidate_signal = target.value
         state.candidate_count = 1
-    if state.candidate_count >= persistence_runs:
+    required_runs = (
+        exit_persistence_runs
+        if active != Signal.WAIT and target != active and exit_persistence_runs is not None
+        else persistence_runs
+    )
+    if state.candidate_count >= required_runs:
         state.active_signal = target.value
         state.candidate_count = 0
         return target, True
@@ -161,11 +284,33 @@ def decide(
     persistence_runs: int,
     enter_threshold: float,
     exit_threshold: float,
+    strong_enter_threshold: float = 3.5,
+    min_sndk_votes: int = 3,
+    min_volume_ratio: float = 0.8,
+    exit_persistence_runs: int = 2,
 ) -> SignalDecision:
     score, reasons, risks = calculate_score(bundle, news, now)
+    raw, gate_reasons, gate_risks = _balanced_entry_signal(
+        bundle,
+        news,
+        now,
+        score,
+        enter_threshold,
+        strong_enter_threshold,
+        min_sndk_votes,
+        min_volume_ratio,
+    )
+    reasons.extend(gate_reasons)
+    risks.extend(gate_risks)
     before = Signal(state.active_signal)
     signal, changed = apply_hysteresis(
-        state, score, persistence_runs, enter_threshold, exit_threshold
+        state,
+        score,
+        persistence_runs,
+        enter_threshold,
+        exit_threshold,
+        entry_signal=raw,
+        exit_persistence_runs=exit_persistence_runs,
     )
     candidate = Signal(state.candidate_signal)
     timestamps = [item.timestamp for item in bundle.values()]
@@ -173,16 +318,10 @@ def decide(
         sorted({item.source for item in bundle.values()} | set(news.sources))
     )
     if not changed and signal == before and candidate != signal:
+        required = exit_persistence_runs if before != Signal.WAIT else persistence_runs
         reasons.append(
-            f"Candidate {candidate.value}: {state.candidate_count}/{persistence_runs} confirmations"
+            f"Candidate {candidate.value}: {state.candidate_count}/{required} confirmations"
         )
-    raw = (
-        Signal.SNXX
-        if score >= enter_threshold
-        else Signal.SNDQ
-        if score <= -enter_threshold
-        else Signal.WAIT
-    )
     return SignalDecision(
-        signal, raw, score, reasons, risks, min(timestamps), source_summary, changed
+        signal, raw, score, reasons[:8], risks[:6], min(timestamps), source_summary, changed
     )

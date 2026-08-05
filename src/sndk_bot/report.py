@@ -15,9 +15,9 @@ DISCLAIMER = (
 
 def _arabic_signal(signal: Signal) -> str:
     labels = {
-        Signal.SNXX: "صعود — يمكن دراسة SNXX",
-        Signal.SNDQ: "هبوط — يمكن دراسة SNDQ",
-        Signal.WAIT: "انتظار / لا توجد إشارة مؤكدة",
+        Signal.SNXX: "SNXX — إشارة صعود نشطة",
+        Signal.SNDQ: "SNDQ — إشارة هبوط نشطة",
+        Signal.WAIT: "WAIT — لا توجد إشارة دخول مؤكدة",
     }
     return labels[signal]
 
@@ -39,9 +39,9 @@ def _direction_summary(
     else:
         direction = "⚪ محايد"
 
-    if decision.signal == Signal.SNXX:
+    if decision.raw_signal == Signal.SNXX and decision.signal == Signal.SNXX:
         confirmation = f"✅ {confirmation_required}/{confirmation_required} — صعود مؤكد"
-    elif decision.signal == Signal.SNDQ:
+    elif decision.raw_signal == Signal.SNDQ and decision.signal == Signal.SNDQ:
         confirmation = f"✅ {confirmation_required}/{confirmation_required} — هبوط مؤكد"
     elif decision.raw_signal == Signal.SNXX:
         count = min(state.candidate_count, confirmation_required)
@@ -50,25 +50,27 @@ def _direction_summary(
         count = min(state.candidate_count, confirmation_required)
         confirmation = f"⏳ {count}/{confirmation_required} — هبوط قيد التأكيد"
     else:
-        confirmation = f"❌ 0/{confirmation_required} — لا توجد إشارة دخول"
+        confirmation = f"❌ 0/{confirmation_required} — شروط الدخول غير مكتملة"
 
+    current_snxx = decision.signal == Signal.SNXX and decision.raw_signal == Signal.SNXX
+    current_sndq = decision.signal == Signal.SNDQ and decision.raw_signal == Signal.SNDQ
     if state.confirmed_position == "SNXX":
         if decision.signal == Signal.SNXX:
             decision_now = "🟢 استمر في SNXX"
-        elif decision.signal == Signal.SNDQ:
+        elif current_sndq:
             decision_now = "🔴 اخرج من SNXX؛ الانعكاس إلى SNDQ مؤكد"
         else:
             decision_now = "🟠 اخرج من SNXX الآن؛ شرط الخروج/WAIT مؤكد"
     elif state.confirmed_position == "SNDQ":
         if decision.signal == Signal.SNDQ:
             decision_now = "🔴 استمر في SNDQ"
-        elif decision.signal == Signal.SNXX:
+        elif current_snxx:
             decision_now = "🟢 اخرج من SNDQ؛ الانعكاس إلى SNXX مؤكد"
         else:
             decision_now = "🟠 اخرج من SNDQ الآن؛ شرط الخروج/WAIT مؤكد"
-    elif decision.signal == Signal.SNXX:
+    elif current_snxx:
         decision_now = "🟢 ادخل SNXX"
-    elif decision.signal == Signal.SNDQ:
+    elif current_sndq:
         decision_now = "🔴 ادخل SNDQ"
     elif decision.raw_signal == Signal.SNXX:
         decision_now = "⛔ لا تدخل الآن؛ انتظر اكتمال تأكيد الصعود"
@@ -96,6 +98,21 @@ def _arabic_reason(text: str) -> str:
     }
     if text.startswith("Headline tone "):
         return "نبرة الأخبار الحديثة محايدة أو محدودة التأثير"
+    if text.startswith("Balanced entry gate passed: "):
+        details = text.removeprefix("Balanced entry gate passed: ")
+        return f"اكتملت بوابة الدخول المتوازن: {details}"
+    if text.startswith("Strong entry gate passed: "):
+        details = text.removeprefix("Strong entry gate passed: ")
+        return f"اكتمل مسار الدخول القوي: {details}"
+    if text.startswith("Entry blocked by high-impact event: "):
+        event = text.removeprefix("Entry blocked by high-impact event: ")
+        return f"مُنع دخول جديد مؤقتًا بسبب حدث حديث عالي التأثير: {event}"
+    if text.startswith("Entry blocked: "):
+        details = text.removeprefix("Entry blocked: ")
+        details = details.replace("SNDK direction votes", "أصوات اتجاه SNDK")
+        details = details.replace("QQQ/SMH market support", "دعم اتجاهي من QQQ أو SMH")
+        details = details.replace("SNDK volume", "حجم SNDK")
+        return f"شروط الدخول غير مكتملة: {details}"
     if text.startswith("Candidate "):
         return "الإشارة ما زالت تحت التأكيد ولم تكتمل شروطها"
     if text.startswith(("QQQ: ", "SMH: ")):
@@ -120,8 +137,13 @@ def format_report(
     now: datetime,
     mandatory_slot: str | None = None,
     data_basis: str | None = None,
-    enter_threshold: float = 3.5,
-    confirmation_required: int = 2,
+    enter_threshold: float = 2.5,
+    confirmation_required: int = 1,
+    strong_enter_threshold: float = 3.5,
+    min_sndk_votes: int = 3,
+    min_volume_ratio: float = 0.8,
+    exit_threshold: float = 1.5,
+    exit_confirmation_required: int = 2,
 ) -> str:
     local = now.astimezone(ZoneInfo("Asia/Riyadh"))
     label = (
@@ -131,11 +153,17 @@ def format_report(
         if mandatory_slot
         else "تغير مؤكد في الإشارة"
     )
-    action = {
-        Signal.SNXX: "الاتجاه صاعد: يمكن دراسة SNXX فقط بعد مراجعتك الشخصية.",
-        Signal.SNDQ: "الاتجاه هابط: يمكن دراسة SNDQ فقط بعد مراجعتك الشخصية.",
-        Signal.WAIT: "انتظار: لا يوجد تأكيد كافٍ لاتجاه دخول الآن.",
-    }[decision.signal]
+    new_entry_signal = (
+        decision.signal if decision.signal == decision.raw_signal else Signal.WAIT
+    )
+    if state.confirmed_position:
+        action = "إدارة المركز القائم حسب القرار المباشر أعلاه؛ لا تفتح مركزًا إضافيًا."
+    else:
+        action = {
+            Signal.SNXX: "الاتجاه الصاعد مكتمل الفلاتر: يمكن دراسة SNXX بعد مراجعتك الشخصية.",
+            Signal.SNDQ: "الاتجاه الهابط مكتمل الفلاتر: يمكن دراسة SNDQ بعد مراجعتك الشخصية.",
+            Signal.WAIT: "انتظار: لا يوجد تأكيد كافٍ لدخول جديد الآن.",
+        }[new_entry_signal]
     reasons = "\n".join(f"• {_arabic_reason(item)}" for item in decision.reasons[:5])
     reasons = reasons or "• لا توجد عوامل مؤكدة كافية"
     risks = "\n".join(f"• {_arabic_reason(item)}" for item in decision.risks[:4])
@@ -155,8 +183,12 @@ def format_report(
         f"الاتجاه الفني الحالي: {direction} | الدرجة: {decision.score:+.2f}\n"
         f"تأكيد الدخول: {confirmation}\n"
         f"القرار الآن: {decision_now}\n"
-        f"قاعدة الدخول: +{enter_threshold:.1f} لـSNXX أو "
-        f"−{enter_threshold:.1f} لـSNDQ في {confirmation_required} تحليلين متتاليين\n"
+        f"قاعدة الدخول المتوازن: ±{enter_threshold:.1f} بتأكيد واحد؛ "
+        f"{min_sndk_votes}/4 من مؤشرات SNDK + دعم QQQ أو SMH + "
+        f"حجم SNDK ≥ {min_volume_ratio:.1f}× + شمعة 15 دقيقة مكتملة\n"
+        f"المسار القوي: |الدرجة| ≥ {strong_enter_threshold:.1f} مع توافق SNDK وSMH والحجم\n"
+        f"قاعدة الخروج: ±{exit_threshold:.1f} مع "
+        f"{exit_confirmation_required} تحليلين متتاليين\n"
         f"الإشارة المعتمدة: {_arabic_signal(decision.signal)}\n"
         f"التوصية: {action}\n"
         f"حالة مركزك: {position}\n"

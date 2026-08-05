@@ -19,9 +19,13 @@ class Config:
     interval: str = "15m"
     lookback: str = "10d"
     stale_minutes: int = 45
-    persistence_runs: int = 2
-    enter_threshold: float = 3.5
+    persistence_runs: int = 1
+    enter_threshold: float = 2.5
+    strong_enter_threshold: float = 3.5
+    min_sndk_votes: int = 3
+    min_volume_ratio: float = 0.8
     exit_threshold: float = 1.5
+    exit_persistence_runs: int = 2
     request_timeout: int = 20
     telegram_webhook_mode: bool = False
 

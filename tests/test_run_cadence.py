@@ -46,8 +46,8 @@ def test_1030_sends_completed_session_report_without_intraday_freshness(monkeypa
     assert app.run(config(tmp_path), now) == 0
     messages = FakeTelegram.instances[0].messages
     assert len(messages) == 1
-    assert "Latest completed US session" in messages[0][0]
-    assert "plus news fetched now" in messages[0][0]
+    assert "آخر جلسة أمريكية مكتملة" in messages[0][0]
+    assert "مع الأخبار المجلوبة الآن" in messages[0][0]
 
 
 def test_pre_1115_change_is_persisted_but_not_alerted(monkeypatch, tmp_path):
