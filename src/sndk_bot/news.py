@@ -79,7 +79,7 @@ def fetch_rss(name: str, url: str, timeout: int) -> list[NewsItem]:
         url, timeout=timeout, headers={"User-Agent": "sndk-monitor/1.0 contact@example.invalid"}
     )
     response.raise_for_status()
-    feed = feedparser.loads(response.content)
+    feed = feedparser.parse(response.content)
     if feed.bozo and not feed.entries:
         raise RuntimeError(f"Invalid feed from {name}")
     return [
