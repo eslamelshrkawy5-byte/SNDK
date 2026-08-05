@@ -15,6 +15,6 @@ def test_health_check_validates_credentials_and_sends_exactly_one_message(monkey
     assert [method for method, _ in calls] == ["getMe", "sendMessage"]
     send_payload = calls[1][1]
     assert send_payload["chat_id"] == "1210859976"
-    assert "CONNECTION TEST" in send_payload["text"]
-    assert "No market data" in send_payload["text"]
-    assert "reply_markup" not in send_payload
+    assert "اختبار اتصال بوت SNDK" in send_payload["text"]
+    assert "لم يتم طلب بيانات سوق" in send_payload["text"]
+    assert "reply_markup" in send_payload

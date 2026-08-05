@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "Run the normal monitor or send one Telegram connection test"
+        description: "Run the monitor, send a test, or send an immediate analysis"
         required: true
         default: "normal"
         type: choice
@@ -18,6 +18,16 @@ on:
           - health-check
           - button-test
           - force-report
+          - position-update
+      position:
+        description: "Confirmed position for position-update only: SNXX, SNDQ, or EXIT"
+        required: false
+        default: "EXIT"
+        type: choice
+        options:
+          - SNXX
+          - SNDQ
+          - EXIT
 
 concurrency:
   group: sndk-signal-monitor
@@ -50,6 +60,7 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           STATE_PATH: data/state.json
+          TELEGRAM_WEBHOOK_MODE: "true"
           DISPATCH_MODE: ${{ inputs.mode || 'normal' }}
         shell: bash
         run: |
@@ -59,12 +70,14 @@ jobs:
             python -m sndk_bot.main --button-test
           elif [[ "${DISPATCH_MODE}" == "force-report" ]]; then
             python -m sndk_bot.main --force-report
+          elif [[ "${DISPATCH_MODE}" == "position-update" ]]; then
+            python -m sndk_bot.main --position-update "${{ inputs.position }}"
           else
             python -m sndk_bot.main
           fi
 
       - name: Persist bot state
-        if: always() && (github.event_name != 'workflow_dispatch' || inputs.mode == 'normal' || inputs.mode == 'force-report')
+        if: always() && (github.event_name != 'workflow_dispatch' || inputs.mode == 'normal' || inputs.mode == 'force-report' || inputs.mode == 'position-update')
         shell: bash
         run: |
           if git diff --quiet -- data/state.json; then

@@ -40,6 +40,24 @@ def test_poll_confirmation_filters_chat_and_advances_offset(monkeypatch):
     assert any(method == "answerCallbackQuery" for method, _ in calls)
 
 
+def test_send_adds_arabic_position_buttons_to_every_report(monkeypatch):
+    client = TelegramClient("fake-token", "1210859976")
+    calls = []
+
+    def fake_post(method, payload):
+        calls.append((method, payload))
+        return {"ok": True, "result": True}
+
+    monkeypatch.setattr(client, "_post", fake_post)
+    client.send("📊 تقرير SNDK عربي", "WAIT")
+
+    method, payload = calls[0]
+    assert method == "sendMessage"
+    assert payload["text"] == "📊 تقرير SNDK عربي"
+    labels = [row[0]["text"] for row in payload["reply_markup"]["inline_keyboard"]]
+    assert labels == ["✅ دخلت SNXX", "✅ دخلت SNDQ", "⬜ لم أدخل / خرجت من المركز"]
+
+
 def test_send_button_test_includes_all_position_actions(monkeypatch):
     client = TelegramClient("fake-token", "1210859976")
     calls = []

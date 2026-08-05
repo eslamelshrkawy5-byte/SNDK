@@ -1,0 +1,12 @@
+{
+  "name": "sndk-telegram-webhook",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "^4.32.0"
+  }
+}

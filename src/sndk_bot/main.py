@@ -52,6 +52,16 @@ def run_button_test(config: Config) -> int:
     return 0
 
 
+def run_position_update(config: Config, position: str) -> int:
+    """Persist Telegram-confirmed position, then immediately reassess SNDK."""
+    store = StateStore(config.state_path)
+    state = store.load()
+    state.confirmed_position = None if position == "EXIT" else position
+    store.save(state)
+    LOG.info("Saved Webhook confirmation: %s", position)
+    return run(config, force_report=True)
+
+
 def run(config: Config, now: datetime | None = None, force_report: bool = False) -> int:
     now = now or datetime.now(UTC)
     store = StateStore(config.state_path)
@@ -60,13 +70,14 @@ def run(config: Config, now: datetime | None = None, force_report: bool = False)
         config.telegram_bot_token, config.telegram_chat_id, config.request_timeout
     )
 
-    confirmations, next_offset = telegram.poll_confirmations(state.telegram_update_offset)
-    state.telegram_update_offset = next_offset
-    for confirmation in confirmations:
-        state.confirmed_position = (
-            None if confirmation.position == "EXIT" else confirmation.position
-        )
-        LOG.info("Saved Telegram confirmation: %s", confirmation.position)
+    if not config.telegram_webhook_mode:
+        confirmations, next_offset = telegram.poll_confirmations(state.telegram_update_offset)
+        state.telegram_update_offset = next_offset
+        for confirmation in confirmations:
+            state.confirmed_position = (
+                None if confirmation.position == "EXIT" else confirmation.position
+            )
+            LOG.info("Saved Telegram confirmation: %s", confirmation.position)
 
     trading_day = is_us_trading_day(now, config.market_calendar)
     slot = (
@@ -166,6 +177,11 @@ def main() -> int:
         action="store_true",
         help="Run a fresh SNDK analysis and send the report immediately",
     )
+    parser.add_argument(
+        "--position-update",
+        choices=["SNXX", "SNDQ", "EXIT"],
+        help="Persist a confirmed position then run an immediate reassessment",
+    )
     args = parser.parse_args()
     try:
         config = Config.from_env()
@@ -173,6 +189,8 @@ def main() -> int:
             return run_health_check(config)
         if args.button_test:
             return run_button_test(config)
+        if args.position_update:
+            return run_position_update(config, args.position_update)
         return run(config, force_report=args.force_report)
     except (ConfigurationError, RuntimeError) as exc:
         LOG.critical("Fatal error: %s", exc)

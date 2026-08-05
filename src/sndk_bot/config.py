@@ -23,6 +23,7 @@ class Config:
     enter_threshold: float = 3.5
     exit_threshold: float = 1.5
     request_timeout: int = 20
+    telegram_webhook_mode: bool = False
 
     @classmethod
     def from_env(cls) -> Config:
@@ -38,4 +39,6 @@ class Config:
             telegram_bot_token=token,
             telegram_chat_id=chat_id,
             state_path=Path(os.getenv("STATE_PATH", "data/state.json")),
+            telegram_webhook_mode=os.getenv("TELEGRAM_WEBHOOK_MODE", "").strip().lower()
+            in {"1", "true", "yes"},
         )

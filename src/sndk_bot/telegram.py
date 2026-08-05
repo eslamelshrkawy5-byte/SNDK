@@ -59,7 +59,7 @@ class TelegramClient:
             if callback.get("id"):
                 self._post(
                     "answerCallbackQuery",
-                    {"callback_query_id": callback["id"], "text": "Position saved"},
+                    {"callback_query_id": callback["id"], "text": "تم حفظ حالة المركز"},
                 )
         return confirmations, next_offset
 
@@ -67,9 +67,8 @@ class TelegramClient:
         """Validate credentials and send exactly one market-independent test message."""
         self._post("getMe", {})
         self.send(
-            "✅ SNDK BOT CONNECTION TEST\n"
-            "Telegram credentials are valid and message delivery works. "
-            "No market data was requested and no trade was executed."
+            "✅ اختبار اتصال بوت SNDK\n"
+            "بيانات Telegram صحيحة والإرسال يعمل. لم يتم طلب بيانات سوق ولم يتم تنفيذ أي صفقة."
         )
 
     def send_button_test(self) -> None:
@@ -80,30 +79,28 @@ class TelegramClient:
             {
                 "chat_id": self.chat_id,
                 "text": (
-                    "🧪 SNDK BOT BUTTON TEST\n"
-                    "Choose one button to test position confirmation. "
-                    "This test does not place any trade."
+                    "🧪 اختبار أزرار بوت SNDK\n"
+                    "اختر أحد الأزرار لتجربة تأكيد حالة المركز. هذا اختبار فقط ولا ينفّذ أي صفقة."
                 ),
                 "disable_web_page_preview": True,
                 "reply_markup": {
                     "inline_keyboard": [
-                        [{"text": "Confirm entered SNXX", "callback_data": "CONFIRM_SNXX"}],
-                        [{"text": "Confirm entered SNDQ", "callback_data": "CONFIRM_SNDQ"}],
-                        [{"text": "Confirm flat / exit", "callback_data": "CONFIRM_EXIT"}],
+                        [{"text": "✅ أكّد دخول SNXX", "callback_data": "CONFIRM_SNXX"}],
+                        [{"text": "✅ أكّد دخول SNDQ", "callback_data": "CONFIRM_SNDQ"}],
+                        [{"text": "⬜ أنا خارج المركز", "callback_data": "CONFIRM_EXIT"}],
                     ]
                 },
             },
         )
 
     def send(self, text: str, signal: str | None = None) -> None:
+        """Send an Arabic report plus position-confirmation buttons on every analysis."""
         payload: dict = {"chat_id": self.chat_id, "text": text, "disable_web_page_preview": True}
-        if signal in {"SNXX", "SNDQ"}:
-            payload["reply_markup"] = {
-                "inline_keyboard": [
-                    [
-                        {"text": f"Confirm entered {signal}", "callback_data": f"CONFIRM_{signal}"},
-                        {"text": "Confirm flat / exit", "callback_data": "CONFIRM_EXIT"},
-                    ]
-                ]
-            }
+        payload["reply_markup"] = {
+            "inline_keyboard": [
+                [{"text": "✅ دخلت SNXX", "callback_data": "CONFIRM_SNXX"}],
+                [{"text": "✅ دخلت SNDQ", "callback_data": "CONFIRM_SNDQ"}],
+                [{"text": "⬜ لم أدخل / خرجت من المركز", "callback_data": "CONFIRM_EXIT"}],
+            ]
+        }
         self._post("sendMessage", payload)

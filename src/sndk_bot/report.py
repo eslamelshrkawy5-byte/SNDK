@@ -7,10 +7,41 @@ from .models import NewsBundle, Signal, SignalDecision
 from .state import BotState
 
 DISCLAIMER = (
-    "⚠️ SNXX/SNDQ are daily-reset leveraged/inverse products. Volatility drag and path dependence "
-    "can cause rapid losses; they are for short-term tactical use, not buy-and-hold. No trade is "
-    "executed. Public-data analysis only—not financial advice."
+    "⚠️ SNXX وSNDQ منتجات يومية برافعة/عكسية ويُعاد ضبطها يوميًا. "
+    "التذبذب قد يسبب خسائر سريعة؛ وهي للاستخدام التكتيكي قصير الأجل وليست للاحتفاظ طويل الأجل. "
+    "لا ينفذ البوت أي صفقة. التحليل من بيانات عامة وليس نصيحة استثمارية."
 )
+
+
+def _arabic_signal(signal: Signal) -> str:
+    labels = {
+        Signal.SNXX: "صعود — يمكن دراسة SNXX",
+        Signal.SNDQ: "هبوط — يمكن دراسة SNDQ",
+        Signal.WAIT: "انتظار / لا توجد إشارة مؤكدة",
+    }
+    return labels[signal]
+
+
+def _arabic_reason(text: str) -> str:
+    replacements = {
+        "EMA9 is above EMA21": "المتوسط EMA9 أعلى من EMA21",
+        "EMA9 is below EMA21": "المتوسط EMA9 أدنى من EMA21",
+        "45-minute momentum is positive": "زخم آخر 45 دقيقة إيجابي",
+        "45-minute momentum is negative": "زخم آخر 45 دقيقة سلبي",
+        "RSI is overextended": "مؤشر RSI في منطقة تمدد مرتفع",
+        "RSI is deeply oversold": "مؤشر RSI في منطقة تشبع بيعي قوي",
+        "No recent directional headline catalyst": "لا توجد أخبار حديثة ذات اتجاه واضح",
+        "QQQ and SMH context disagree; confidence reduced": "اتجاه QQQ وSMH متعارض؛ الثقة أقل",
+        "SNDK volume confirmation is weak": "تأكيد الحجم على SNDK ضعيف",
+        "News sources unavailable; technical-only confidence": (
+            "مصادر الأخبار غير متاحة؛ الثقة مبنية على التحليل الفني فقط"
+        ),
+    }
+    if text.startswith("Headline tone "):
+        return "نبرة الأخبار الحديثة محايدة أو محدودة التأثير"
+    if text.startswith("Candidate "):
+        return "الإشارة ما زالت تحت التأكيد ولم تكتمل شروطها"
+    return replacements.get(text, text)
 
 
 def format_report(
@@ -23,44 +54,47 @@ def format_report(
 ) -> str:
     local = now.astimezone(ZoneInfo("Asia/Riyadh"))
     label = (
-        "ON-DEMAND ANALYSIS"
+        "تحليل فوري بطلب منك"
         if mandatory_slot == "manual"
-        else "MANDATORY REPORT"
+        else "تقرير إلزامي"
         if mandatory_slot
-        else "CONFIRMED STATE CHANGE"
+        else "تغير مؤكد في الإشارة"
     )
     action = {
-        Signal.SNXX: "Bullish SNDK setup → consider SNXX only after your own checks",
-        Signal.SNDQ: "Bearish SNDK setup → consider SNDQ only after your own checks",
-        Signal.WAIT: "WAIT / explicit risk exit: directional confirmation is insufficient",
+        Signal.SNXX: "الاتجاه صاعد: يمكن دراسة SNXX فقط بعد مراجعتك الشخصية.",
+        Signal.SNDQ: "الاتجاه هابط: يمكن دراسة SNDQ فقط بعد مراجعتك الشخصية.",
+        Signal.WAIT: "انتظار: لا يوجد تأكيد كافٍ لاتجاه دخول الآن.",
     }[decision.signal]
-    reasons = "\n".join(f"• {item}" for item in decision.reasons[:5]) or "• No validated factors"
-    risks = (
-        "\n".join(f"• {item}" for item in decision.risks[:4]) or "• Standard market and gap risk"
-    )
+    reasons = "\n".join(f"• {_arabic_reason(item)}" for item in decision.reasons[:5])
+    reasons = reasons or "• لا توجد عوامل مؤكدة كافية"
+    risks = "\n".join(f"• {_arabic_reason(item)}" for item in decision.risks[:4])
+    risks = risks or "• مخاطر تذبذب وفجوات سعرية معتادة"
     headlines = "\n".join(f"• {item.title[:110]} ({item.source})" for item in news.items[:3])
     if not headlines:
-        headlines = "• No fresh headlines retrieved; signal confidence is reduced"
-    position = state.confirmed_position or "FLAT / not confirmed"
-    basis = data_basis or "Strictly fresh 15-minute intraday bars plus current news"
+        headlines = "• لم يتم الحصول على أخبار حديثة؛ خُفّضت درجة الثقة"
+    position_labels = {"SNXX": "داخل SNXX", "SNDQ": "داخل SNDQ", None: "لم تؤكد دخولًا"}
+    position = position_labels.get(state.confirmed_position, "لم تؤكد دخولًا")
+    basis = data_basis or "بيانات 15 دقيقة حديثة مع الأخبار الحالية"
     return (
-        f"📊 SNDK {label}\n"
-        f"Riyadh: {local:%Y-%m-%d %H:%M %Z}\n"
-        f"Signal: {decision.signal.value} | Score: {decision.score:+.2f}\n"
-        f"Action: {action}\n"
-        f"Confirmed position: {position}\n"
-        f"Data basis: {basis}\n\n"
-        f"Factors:\n{reasons}\n\nRisks:\n{risks}\n\n"
-        f"Latest headlines:\n{headlines}\n\n"
-        f"Market bar timestamp: {decision.data_timestamp.isoformat()}\n"
-        f"Sources: {decision.source_summary or 'market source only'}\n\n{DISCLAIMER}"
+        f"📊 SNDK | {label}\n"
+        f"الرياض: {local:%Y-%m-%d %H:%M}\n"
+        f"الإشارة: {_arabic_signal(decision.signal)} | الدرجة: {decision.score:+.2f}\n"
+        f"التوصية: {action}\n"
+        f"حالة مركزك: {position}\n"
+        f"أساس التحليل: {basis}\n\n"
+        f"العوامل:\n{reasons}\n\nالمخاطر:\n{risks}\n\n"
+        f"أحدث الأخبار:\n{headlines}\n\n"
+        f"آخر شمعة سوق: {decision.data_timestamp.isoformat()}\n"
+        f"المصادر: {decision.source_summary or 'مصدر السوق فقط'}\n\n{DISCLAIMER}"
     )
 
 
 def format_data_error(message: str, now: datetime, mandatory: bool) -> str:
     local = now.astimezone(ZoneInfo("Asia/Riyadh"))
-    kind = "MANDATORY SAFETY REPORT" if mandatory else "DATA RISK EXIT"
+    kind = "تقرير أمان إلزامي" if mandatory else "تنبيه أمان للبيانات"
     return (
-        f"⚠️ SNDK {kind}\nRiyadh: {local:%Y-%m-%d %H:%M %Z}\n"
-        f"Signal: WAIT\nReason: {message}\nNo directional trade signal is issued.\n\n{DISCLAIMER}"
+        f"⚠️ SNDK | {kind}\nالرياض: {local:%Y-%m-%d %H:%M}\n"
+        "الإشارة: انتظار\n"
+        f"السبب: تعذّر الحصول على بيانات سوق حديثة وموثوقة ({message[:260]}).\n"
+        f"لا توجد توصية دخول اتجاهية.\n\n{DISCLAIMER}"
     )
