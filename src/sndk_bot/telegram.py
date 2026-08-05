@@ -72,6 +72,29 @@ class TelegramClient:
             "No market data was requested and no trade was executed."
         )
 
+    def send_button_test(self) -> None:
+        """Send all position buttons for an explicit interaction test."""
+        self._post("getMe", {})
+        self._post(
+            "sendMessage",
+            {
+                "chat_id": self.chat_id,
+                "text": (
+                    "🧪 SNDK BOT BUTTON TEST\n"
+                    "Choose one button to test position confirmation. "
+                    "This test does not place any trade."
+                ),
+                "disable_web_page_preview": True,
+                "reply_markup": {
+                    "inline_keyboard": [
+                        [{"text": "Confirm entered SNXX", "callback_data": "CONFIRM_SNXX"}],
+                        [{"text": "Confirm entered SNDQ", "callback_data": "CONFIRM_SNDQ"}],
+                        [{"text": "Confirm flat / exit", "callback_data": "CONFIRM_EXIT"}],
+                    ]
+                },
+            },
+        )
+
     def send(self, text: str, signal: str | None = None) -> None:
         payload: dict = {"chat_id": self.chat_id, "text": text, "disable_web_page_preview": True}
         if signal in {"SNXX", "SNDQ"}:

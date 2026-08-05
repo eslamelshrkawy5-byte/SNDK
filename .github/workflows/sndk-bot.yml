@@ -16,6 +16,7 @@ on:
         options:
           - normal
           - health-check
+          - button-test
 
 concurrency:
   group: sndk-signal-monitor
@@ -53,12 +54,14 @@ jobs:
         run: |
           if [[ "${DISPATCH_MODE}" == "health-check" ]]; then
             python -m sndk_bot.main --health-check
+          elif [[ "${DISPATCH_MODE}" == "button-test" ]]; then
+            python -m sndk_bot.main --button-test
           else
             python -m sndk_bot.main
           fi
 
       - name: Persist bot state
-        if: always() && (github.event_name != 'workflow_dispatch' || inputs.mode != 'health-check')
+        if: always() && (github.event_name != 'workflow_dispatch' || inputs.mode == 'normal')
         shell: bash
         run: |
           if git diff --quiet -- data/state.json; then

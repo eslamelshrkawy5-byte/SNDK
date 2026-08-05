@@ -43,6 +43,15 @@ def run_health_check(config: Config) -> int:
     return 0
 
 
+def run_button_test(config: Config) -> int:
+    telegram = TelegramClient(
+        config.telegram_bot_token, config.telegram_chat_id, config.request_timeout
+    )
+    telegram.send_button_test()
+    LOG.info("Telegram button test sent")
+    return 0
+
+
 def run(config: Config, now: datetime | None = None) -> int:
     now = now or datetime.now(UTC)
     store = StateStore(config.state_path)
@@ -145,10 +154,19 @@ def main() -> int:
         action="store_true",
         help="Validate Telegram and send one connection-test message without market data",
     )
+    parser.add_argument(
+        "--button-test",
+        action="store_true",
+        help="Send position-confirmation buttons without fetching market data",
+    )
     args = parser.parse_args()
     try:
         config = Config.from_env()
-        return run_health_check(config) if args.health_check else run(config)
+        if args.health_check:
+            return run_health_check(config)
+        if args.button_test:
+            return run_button_test(config)
+        return run(config)
     except (ConfigurationError, RuntimeError) as exc:
         LOG.critical("Fatal error: %s", exc)
         return 2
