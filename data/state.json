@@ -3,8 +3,8 @@
   "candidate_count": 0,
   "candidate_signal": "WAIT",
   "confirmed_position": "SNXX",
-  "last_alert_at": "2026-08-05T15:56:56.789467+00:00",
-  "last_data_timestamp": "2026-08-05T15:45:00+00:00",
+  "last_alert_at": "2026-08-05T16:04:05.926035+00:00",
+  "last_data_timestamp": "2026-08-05T16:04:02+00:00",
   "last_mandatory_1030": null,
   "last_mandatory_1115": null,
   "telegram_update_offset": 0
