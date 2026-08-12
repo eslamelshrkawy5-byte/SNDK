@@ -6,6 +6,7 @@ import sys
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
+from . import __version__
 from .calendar import change_alerts_enabled, is_us_trading_day, mandatory_slot
 from .config import Config, ConfigurationError
 from .market import (
@@ -139,6 +140,7 @@ def run(config: Config, now: datetime | None = None, force_report: bool = False)
                     now,
                     slot,
                     data_basis,
+                    config.timezone,
                     config.enter_threshold,
                     config.persistence_runs,
                     config.strong_enter_threshold,
@@ -161,7 +163,7 @@ def run(config: Config, now: datetime | None = None, force_report: bool = False)
         )
         should_send = slot is not None or risk_exit
         if should_send:
-            telegram.send(format_data_error(str(exc), now, slot is not None))
+            telegram.send(format_data_error(str(exc), now, slot is not None, config.timezone))
             mandatory_sent = slot is not None
             state.last_alert_at = now.isoformat()
         state.active_signal = Signal.WAIT.value
@@ -181,7 +183,15 @@ def main() -> int:
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
-    parser = argparse.ArgumentParser(description="SNDK Telegram signal monitor")
+    parser = argparse.ArgumentParser(
+        prog="sndk-bot", description="SNDK Telegram signal monitor"
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
+        help="Show the installed version and exit",
+    )
     parser.add_argument(
         "--health-check",
         action="store_true",

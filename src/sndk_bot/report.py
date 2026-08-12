@@ -27,14 +27,15 @@ def _direction_summary(
     state: BotState,
     enter_threshold: float,
     confirmation_required: int,
+    exit_threshold: float = 1.5,
 ) -> tuple[str, str, str]:
     if decision.score >= enter_threshold:
         direction = "🟢 صاعد قوي"
-    elif decision.score >= 1.5:
+    elif decision.score >= exit_threshold:
         direction = "🟡 ميل صاعد غير مؤكد"
     elif decision.score <= -enter_threshold:
         direction = "🔴 هابط قوي"
-    elif decision.score <= -1.5:
+    elif decision.score <= -exit_threshold:
         direction = "🟠 ميل هابط غير مؤكد"
     else:
         direction = "⚪ محايد"
@@ -137,6 +138,7 @@ def format_report(
     now: datetime,
     mandatory_slot: str | None = None,
     data_basis: str | None = None,
+    timezone: str = "Asia/Riyadh",
     enter_threshold: float = 2.5,
     confirmation_required: int = 1,
     strong_enter_threshold: float = 3.5,
@@ -145,7 +147,7 @@ def format_report(
     exit_threshold: float = 1.5,
     exit_confirmation_required: int = 2,
 ) -> str:
-    local = now.astimezone(ZoneInfo("Asia/Riyadh"))
+    local = now.astimezone(ZoneInfo(timezone))
     label = (
         "تحليل فوري بطلب منك"
         if mandatory_slot == "manual"
@@ -174,7 +176,7 @@ def format_report(
     position_labels = {"SNXX": "داخل SNXX", "SNDQ": "داخل SNDQ", None: "لم تؤكد دخولًا"}
     position = position_labels.get(state.confirmed_position, "لم تؤكد دخولًا")
     direction, confirmation, decision_now = _direction_summary(
-        decision, state, enter_threshold, confirmation_required
+        decision, state, enter_threshold, confirmation_required, exit_threshold
     )
     basis = data_basis or "بيانات 15 دقيقة حديثة مع الأخبار الحالية"
     return (
@@ -200,8 +202,10 @@ def format_report(
     )
 
 
-def format_data_error(message: str, now: datetime, mandatory: bool) -> str:
-    local = now.astimezone(ZoneInfo("Asia/Riyadh"))
+def format_data_error(
+    message: str, now: datetime, mandatory: bool, timezone: str = "Asia/Riyadh"
+) -> str:
+    local = now.astimezone(ZoneInfo(timezone))
     kind = "تقرير أمان إلزامي" if mandatory else "تنبيه أمان للبيانات"
     return (
         f"⚠️ SNDK | {kind}\nالرياض: {local:%Y-%m-%d %H:%M}\n"
