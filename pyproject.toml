@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sndk-signal-bot"
-version = "1.0.0"
+dynamic = ["version"]
 description = "Conservative SNDK signal monitor with Telegram notifications"
 requires-python = ">=3.11"
 dependencies = [
@@ -32,6 +32,9 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.dynamic]
+version = {attr = "sndk_bot.__version__"}
 
 [tool.pytest.ini_options]
 addopts = "-q --strict-markers --disable-warnings"
