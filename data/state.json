@@ -1,6 +1,6 @@
 {
-  "active_signal": "SNDQ",
-  "candidate_count": 1,
+  "active_signal": "WAIT",
+  "candidate_count": 0,
   "candidate_signal": "WAIT",
   "confirmed_position": "SNXX",
   "last_alert_at": "2026-08-05T17:05:53.244797+00:00",
